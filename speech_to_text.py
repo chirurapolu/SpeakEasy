@@ -125,14 +125,35 @@ def speech_to_text_tab():
         # Store recognized text in session state
         if 'recognized_text' not in st.session_state:
             st.session_state.recognized_text = None
-        
-        if st.button("🎤 Start Speech to Text", key="stt_button"):
-            text = speech_to_text(audio_source, audio_file, stt_lang)
-            if text:
-                st.session_state.recognized_text = text
+            
+        if audio_source == "Microphone":
+            from stt_component import realtime_stt
+            
+            if 'is_listening' not in st.session_state:
+                st.session_state.is_listening = False
+                
+            if st.session_state.is_listening:
+                if st.button("⏹ Stop Live Dictation", key="stop_live"):
+                    st.session_state.is_listening = False
+                    st.rerun()
+            else:
+                if st.button("🎤 Start Live Dictation", key="start_live"):
+                    st.session_state.is_listening = True
+                    st.rerun()
+                    
+            stt_result = realtime_stt(lang=LANGUAGES[stt_lang], start=st.session_state.is_listening, key="live_stt")
+            if stt_result and stt_result.get("final"):
+                st.session_state.recognized_text = stt_result.get("final")
+        else:
+            if st.button("⬆️ Process Audio File", key="upload_btn"):
+                text = speech_to_text(audio_source, audio_file, stt_lang)
+                if text:
+                    st.session_state.recognized_text = text
         
         # Display results if text exists in session state
         if st.session_state.recognized_text:
+            if audio_source == "Microphone":
+                st.markdown("<h4>Final Saved Text:</h4>", unsafe_allow_html=True)
             st.markdown(f"""
             <div class="result-box">
                 <p>{st.session_state.recognized_text}</p>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+        #status { padding: 10px; min-height: 100px; box-sizing: border-box; }
+    </style>
+    <script>
+        function sendMessageToStreamlitClient(type, data) {
+            window.parent.postMessage({
+                isStreamlitMessage: true,
+                type: type,
+                ...data
+            }, "*");
+        }
+
+        function setComponentValue(value) {
+            sendMessageToStreamlitClient("streamlit:setComponentValue", { value: value });
+        }
+
+        function setFrameHeight(height) {
+            sendMessageToStreamlitClient("streamlit:setFrameHeight", { height: height });
+        }
+
+        let recognition = null;
+        let isStarted = false;
+        let finalTranscript = '';
+
+        function onDataFromPython(event) {
+            if (event.data.type !== "streamlit:render") return;
+            const args = event.data.args;
+
+            if (args.start && !isStarted) {
+                isStarted = true;
+                finalTranscript = ''; // Reset on start
+                
+                // Use parent window's SpeechRecognition to avoid iframe sandbox restrictions
+                const SpeechRecognition = window.parent.SpeechRecognition || window.parent.webkitSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
+                
+                if (!SpeechRecognition) {
+                    document.getElementById('status').innerHTML = "<span style='color:red;'>Browser not supported. Please use Chrome/Safari.</span>";
+                    setFrameHeight(100);
+                    return;
+                }
+                
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = args.lang;
+                
+                recognition.onresult = (e) => {
+                    let interimTranscript = '';
+                    let tempFinal = '';
+                    for (let i = e.resultIndex; i < e.results.length; ++i) {
+                        if (e.results[i].isFinal) {
+                            tempFinal += e.results[i][0].transcript + " ";
+                        } else {
+                            interimTranscript += e.results[i][0].transcript;
+                        }
+                    }
+                    
+                    finalTranscript += tempFinal;
+                    
+                    document.getElementById('status').innerHTML = '<div style="background:#e8f5e9; padding:15px; border-radius:8px; border:1px solid #4CAF50; min-height: 100px;"><span style="color:#2e7d32;font-weight:bold;animation: pulse 1s infinite;">🎤 Live Listening...</span><br/><br/><span style="color:black;font-size:18px;">' + finalTranscript + '</span><span style="color:gray;font-size:18px;font-style:italic;">' + interimTranscript + '</span></div>';
+                    
+                    setFrameHeight(Math.max(150, document.body.scrollHeight));
+                    
+                    setComponentValue({
+                        final: finalTranscript,
+                        interim: interimTranscript
+                    });
+                };
+
+                recognition.onerror = (e) => {
+                    document.getElementById('status').innerHTML += '<br><span style="color:red">Error: ' + e.error + '</span>';
+                    setFrameHeight(Math.max(150, document.body.scrollHeight));
+                };
+
+                recognition.onend = () => {
+                    if (isStarted && recognition) {
+                        recognition.start(); // Auto-restart for continuous dictation
+                    }
+                };
+
+                recognition.start();
+                document.getElementById('status').innerHTML = '<div style="background:#e8f5e9; padding:15px; border-radius:8px; border:1px solid #4CAF50; min-height: 100px;"><span style="color:#2e7d32;font-weight:bold;">🎤 Starting Microphone... Please ensure permissions are granted.</span></div>';
+                setFrameHeight(150);
+                
+            } else if (!args.start && isStarted) {
+                isStarted = false;
+                if (recognition) {
+                    recognition.onend = null;
+                    recognition.stop();
+                    recognition = null;
+                }
+                document.getElementById('status').innerHTML = '<div style="background:#f5f5f5; padding:15px; border-radius:8px; border:1px solid #ddd; min-height: 60px;"><span style="color:#555;font-weight:bold;">⏹ Ready to start.</span></div>';
+                setFrameHeight(100);
+            } else if (!args.start && !isStarted && finalTranscript === '') {
+                // Initial state
+                document.getElementById('status').innerHTML = '';
+                setFrameHeight(0);
+            }
+        }
+
+        window.addEventListener("message", onDataFromPython);
+        sendMessageToStreamlitClient("streamlit:componentReady", { apiVersion: 1 });
+        setFrameHeight(0);
+    </script>
+</head>
+<body>
+    <div id="status"></div>
+</body>
+</html>

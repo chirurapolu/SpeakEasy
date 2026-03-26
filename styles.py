@@ -207,35 +207,7 @@ custom_css = """
         }
     }
 
-    /* Custom select box */
-    .stSelectbox>div>div {
-        border-radius: 8px !important;
-        padding: 10px 15px;
-        transition: border-color 0.3s;
-        border: 1px solid #ced4da;
-    }
-    .stSelectbox>div>div:focus-within {
-        border-color: var(--accent) !important;
-    }
-
-    /* Custom text area */
-    .stTextArea>div>div>textarea {
-        border-radius: 8px !important;
-        padding: 15px !important;
-        min-height: 150px;
-        border: 1px solid #ced4da;
-        transition: border-color 0.3s;
-    }
-    .stTextArea>div>div>textarea:focus {
-        border-color: var(--accent) !important;
-        outline: none;
-    }
-
-    /* Custom slider */
-    .stSlider>div>div>div>div[data-testid="stThumb"] {
-        background-color: var(--primary);
-        border: 2px solid var(--light);
-    }
+    /* Removed buggy custom widget CSS, relying on Streamlit native theme */
 
     /* Success message */
     .stAlert {
