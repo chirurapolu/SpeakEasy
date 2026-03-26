@@ -188,8 +188,29 @@ def text_to_speech_tab():
                         engine = pyttsx3.init()
                         engine.setProperty('rate', voice_speed)
                         voices = engine.getProperty('voices')
-                        voice_idx = 0 if voice_gender == "Male" else 1
-                        engine.setProperty('voice', voices[voice_idx].id)
+                        
+                        # Find appropriate voice
+                        target_lang_code = LANGUAGES[tts_lang].lower()
+                        best_voice_id = None
+                        
+                        if target_lang_code == 'en':
+                            if voice_gender == "Female":
+                                best_voice_id = next((v.id for v in voices if "samantha" in v.name.lower()), None)
+                            else:
+                                best_voice_id = next((v.id for v in voices if "daniel" in v.name.lower()), None)
+                        
+                        if not best_voice_id:
+                            matching_voices = []
+                            for v in voices:
+                                langs = v.languages
+                                if langs and isinstance(langs, (list, tuple)) and any(target_lang_code in str(l).lower() for l in langs):
+                                    matching_voices.append(v)
+                            if matching_voices:
+                                best_voice_id = matching_voices[0].id
+                            else:
+                                best_voice_id = voices[0 if voice_gender == "Male" else 1].id
+                                
+                        engine.setProperty('voice', best_voice_id)
                         
                         # Connect end event
                         engine.connect('finished-utterance', on_end)
