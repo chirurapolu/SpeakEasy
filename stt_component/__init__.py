@@ -6,5 +6,5 @@ _component_func = components.declare_component(
     path=os.path.dirname(os.path.abspath(__file__))
 )
 
-def realtime_stt(lang='en-US', start=False, key=None):
-    return _component_func(lang=lang, start=start, key=key)
+def realtime_stt(lang='en-US', key=None):
+    return _component_func(lang=lang, key=key)

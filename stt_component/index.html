@@ -3,21 +3,29 @@
 <head>
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-        #status { padding: 10px; min-height: 100px; box-sizing: border-box; }
+        .stButton button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        .stButton button:hover { background-color: #2563eb; }
+        .stButton.stop button { background-color: #ef4444; }
+        .stButton.stop button:hover { background-color: #dc2626; }
+        #status { padding: 15px; margin-top: 15px; border-radius: 8px; box-sizing: border-box; display: none; font-size: 16px; min-height: 80px;}
     </style>
     <script>
         function sendMessageToStreamlitClient(type, data) {
-            window.parent.postMessage({
-                isStreamlitMessage: true,
-                type: type,
-                ...data
-            }, "*");
+            window.parent.postMessage({ isStreamlitMessage: true, type: type, ...data }, "*");
         }
-
         function setComponentValue(value) {
             sendMessageToStreamlitClient("streamlit:setComponentValue", { value: value });
         }
-
         function setFrameHeight(height) {
             sendMessageToStreamlitClient("streamlit:setFrameHeight", { height: height });
         }
@@ -25,28 +33,38 @@
         let recognition = null;
         let isStarted = false;
         let finalTranscript = '';
+        let currentLang = 'en-US';
 
         function onDataFromPython(event) {
             if (event.data.type !== "streamlit:render") return;
-            const args = event.data.args;
+            if (event.data.args && event.data.args.lang) {
+                currentLang = event.data.args.lang;
+            }
+            setFrameHeight(document.body.scrollHeight + 20);
+        }
 
-            if (args.start && !isStarted) {
-                isStarted = true;
-                finalTranscript = ''; // Reset on start
-                
-                // Use parent window's SpeechRecognition to avoid iframe sandbox restrictions
-                const SpeechRecognition = window.parent.SpeechRecognition || window.parent.webkitSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
-                
+        function toggleDictation() {
+            const btnContainer = document.getElementById('btn-container');
+            const btn = document.getElementById('stt-btn');
+            const statusDiv = document.getElementById('status');
+            
+            if (!isStarted) {
+                // START
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (!SpeechRecognition) {
-                    document.getElementById('status').innerHTML = "<span style='color:red;'>Browser not supported. Please use Chrome/Safari.</span>";
-                    setFrameHeight(100);
+                    statusDiv.style.display = 'block';
+                    statusDiv.innerHTML = "<span style='color:red;'>Browser not supported. Please use Chrome/Safari.</span>";
+                    setFrameHeight(document.body.scrollHeight + 20);
                     return;
                 }
                 
                 recognition = new SpeechRecognition();
                 recognition.continuous = true;
                 recognition.interimResults = true;
-                recognition.lang = args.lang;
+                recognition.lang = currentLang;
+                
+                finalTranscript = '';
+                setComponentValue({ final: '', interim: '' });
                 
                 recognition.onresult = (e) => {
                     let interimTranscript = '';
@@ -58,56 +76,71 @@
                             interimTranscript += e.results[i][0].transcript;
                         }
                     }
-                    
                     finalTranscript += tempFinal;
                     
-                    document.getElementById('status').innerHTML = '<div style="background:#e8f5e9; padding:15px; border-radius:8px; border:1px solid #4CAF50; min-height: 100px;"><span style="color:#2e7d32;font-weight:bold;animation: pulse 1s infinite;">🎤 Live Listening...</span><br/><br/><span style="color:black;font-size:18px;">' + finalTranscript + '</span><span style="color:gray;font-size:18px;font-style:italic;">' + interimTranscript + '</span></div>';
+                    statusDiv.innerHTML = '<span style="color:#2e7d32;font-weight:bold;animation: pulse 1s infinite;">🎤 Live Listening...</span><br/><br/><span style="color:black;">' + finalTranscript + '</span><span style="color:gray;font-style:italic;">' + interimTranscript + '</span>';
+                    setFrameHeight(document.body.scrollHeight + 20);
                     
-                    setFrameHeight(Math.max(150, document.body.scrollHeight));
-                    
-                    setComponentValue({
-                        final: finalTranscript,
-                        interim: interimTranscript
-                    });
+                    setComponentValue({ final: finalTranscript, interim: interimTranscript });
                 };
 
                 recognition.onerror = (e) => {
-                    document.getElementById('status').innerHTML += '<br><span style="color:red">Error: ' + e.error + '</span>';
-                    setFrameHeight(Math.max(150, document.body.scrollHeight));
+                    let errMsg = e.error;
+                    if (e.error === 'service-not-allowed' || e.error === 'not-allowed') {
+                        errMsg += "<br><span style='font-size:14px;color:#d32f2f;'>Tip: Safari uses your Mac's built-in Dictation. If a language (like Telugu) isn't added in <b>System Settings > Keyboard > Dictation</b>, Safari blocks it. For full language support without changing Mac settings, please open this app in <b>Google Chrome</b>.</span>";
+                    }
+                    statusDiv.innerHTML += '<br><br><span style="color:red">Error: ' + errMsg + '</span>';
+                    setFrameHeight(document.body.scrollHeight + 20);
                 };
 
                 recognition.onend = () => {
                     if (isStarted && recognition) {
-                        recognition.start(); // Auto-restart for continuous dictation
+                        try { recognition.start(); } catch(err) {} 
                     }
                 };
 
-                recognition.start();
-                document.getElementById('status').innerHTML = '<div style="background:#e8f5e9; padding:15px; border-radius:8px; border:1px solid #4CAF50; min-height: 100px;"><span style="color:#2e7d32;font-weight:bold;">🎤 Starting Microphone... Please ensure permissions are granted.</span></div>';
-                setFrameHeight(150);
+                try {
+                    recognition.start();
+                    isStarted = true;
+                    btnContainer.className = 'stButton stop';
+                    btn.innerHTML = '⏹ Stop Live Dictation';
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.background = '#e8f5e9';
+                    statusDiv.style.border = '1px solid #4CAF50';
+                    statusDiv.innerHTML = '<span style="color:#2e7d32;font-weight:bold;">🎤 Starting Microphone... Please ensure permissions are granted.</span>';
+                    setFrameHeight(document.body.scrollHeight + 20);
+                } catch (e) {
+                    statusDiv.style.display = 'block';
+                    statusDiv.innerHTML = '<span style="color:red">Failed to start: ' + e.message + '</span>';
+                    setFrameHeight(document.body.scrollHeight + 20);
+                }
                 
-            } else if (!args.start && isStarted) {
+            } else {
+                // STOP
                 isStarted = false;
                 if (recognition) {
                     recognition.onend = null;
                     recognition.stop();
                     recognition = null;
                 }
-                document.getElementById('status').innerHTML = '<div style="background:#f5f5f5; padding:15px; border-radius:8px; border:1px solid #ddd; min-height: 60px;"><span style="color:#555;font-weight:bold;">⏹ Ready to start.</span></div>';
-                setFrameHeight(100);
-            } else if (!args.start && !isStarted && finalTranscript === '') {
-                // Initial state
-                document.getElementById('status').innerHTML = '';
-                setFrameHeight(0);
+                btnContainer.className = 'stButton';
+                btn.innerHTML = '🎤 Start Live Dictation';
+                statusDiv.style.background = '#f5f5f5';
+                statusDiv.style.border = '1px solid #ddd';
+                statusDiv.innerHTML = '<span style="color:#555;font-weight:bold;">⏹ Stopped.</span><br/><br/><span style="color:black;">' + finalTranscript + '</span>';
+                setFrameHeight(document.body.scrollHeight + 20);
             }
         }
 
         window.addEventListener("message", onDataFromPython);
         sendMessageToStreamlitClient("streamlit:componentReady", { apiVersion: 1 });
-        setFrameHeight(0);
+        setFrameHeight(60); 
     </script>
 </head>
 <body>
+    <div class="stButton" id="btn-container">
+        <button id="stt-btn" onclick="toggleDictation()">🎤 Start Live Dictation</button>
+    </div>
     <div id="status"></div>
 </body>
 </html>

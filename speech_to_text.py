@@ -129,19 +129,9 @@ def speech_to_text_tab():
         if audio_source == "Microphone":
             from stt_component import realtime_stt
             
-            if 'is_listening' not in st.session_state:
-                st.session_state.is_listening = False
-                
-            if st.session_state.is_listening:
-                if st.button("⏹ Stop Live Dictation", key="stop_live"):
-                    st.session_state.is_listening = False
-                    st.rerun()
-            else:
-                if st.button("🎤 Start Live Dictation", key="start_live"):
-                    st.session_state.is_listening = True
-                    st.rerun()
-                    
-            stt_result = realtime_stt(lang=LANGUAGES[stt_lang], start=st.session_state.is_listening, key="live_stt")
+            # The component handles its own start/stop button via JS and returns final text
+            stt_result = realtime_stt(lang=LANGUAGES[stt_lang], key="live_stt")
+            
             if stt_result and stt_result.get("final"):
                 st.session_state.recognized_text = stt_result.get("final")
         else:
