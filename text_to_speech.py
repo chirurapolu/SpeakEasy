@@ -6,6 +6,7 @@ import os
 from io import BytesIO
 import time
 from utils import LANGUAGES
+from gtts import gTTS
 
 async def get_valid_voice(lang_code, gender):
     voices = await edge_tts.list_voices()
@@ -88,7 +89,23 @@ def text_to_speech_tab():
                             st.audio(audio_bytes, format="audio/mpeg", autoplay=True)
                             st.success("Playback started!")
                         except Exception as e:
-                            st.error(f"❌ Error generating speech: {e}")
+                            if "No audio was received" in str(e) or "WebSocket" in str(e):
+                                st.warning("⚠️ High-quality voice unsupported for this text/language. Falling back to standard Google TTS...")
+                                try:
+                                    short_lang = lang_code.split('-')[0]
+                                    tts = gTTS(text=text_input, lang=short_lang)
+                                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+                                        temp_path = fp.name
+                                    tts.save(temp_path)
+                                    with open(temp_path, "rb") as f:
+                                        fallback_audio = f.read()
+                                    os.unlink(temp_path)
+                                    st.audio(fallback_audio, format="audio/mpeg", autoplay=True)
+                                    st.success("Playback started (Google TTS)!")
+                                except Exception as fallback_e:
+                                    st.error(f"❌ Both TTS engines failed. Fallback error: {fallback_e}")
+                            else:
+                                st.error(f"❌ Error generating speech: {e}")
                 else:
                     st.warning("⚠️ Please enter some text first")
 
@@ -108,6 +125,27 @@ def text_to_speech_tab():
                                 key="final_download"
                             )
                         except Exception as e:
-                            st.error(f"❌ Error generating speech: {e}")
+                            if "No audio was received" in str(e) or "WebSocket" in str(e):
+                                st.warning("⚠️ High-quality voice unsupported for this text/language. Falling back to standard Google TTS...")
+                                try:
+                                    short_lang = lang_code.split('-')[0]
+                                    tts = gTTS(text=text_input, lang=short_lang)
+                                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+                                        temp_path = fp.name
+                                    tts.save(temp_path)
+                                    with open(temp_path, "rb") as f:
+                                        fallback_audio = f.read()
+                                    os.unlink(temp_path)
+                                    st.download_button(
+                                        label="💾 Download Fallback MP3",
+                                        data=fallback_audio,
+                                        file_name="standard_speech.mp3",
+                                        mime="audio/mpeg",
+                                        key="fallback_download"
+                                    )
+                                except Exception as fallback_e:
+                                    st.error(f"❌ Both TTS engines failed. Fallback error: {fallback_e}")
+                            else:
+                                st.error(f"❌ Error generating speech: {e}")
                 else:
                     st.warning("⚠️ Please enter some text first")
